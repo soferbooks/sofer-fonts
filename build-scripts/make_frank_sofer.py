@@ -682,14 +682,19 @@ def _points(t: TTFont, name: str, step: int = 6) -> list[tuple[float, float]]:
 
 
 EDGE_TAAMIM = (0x059A, 0x05AD)      # (yetiv and dehi: set at the letter's edge - never moved)
+AS_THEY_ARE = {"qof", "finalkaf", "finalnun", "finalpe", "finaltsadi"}   # (ק: qof_with_meteg; the tails)
 
 
 def centred_with_another(t: TTFont) -> dict[str, int]:
-    """A vowel with a ta'am or a meteg under ה ח ת (under the open space) or ש ט (under the floor):
-    Taamey D sets the two side by side around the middle, so the vowel was off the middle.  The
-    vowel now stays in the middle, the other mark beside it as far from it as before; only when
-    the two would then stand out past the letter is the vowel moved, by as little as keeps them
-    under it (Mordy, 2026-10-29: "only move the nikkud if necessary").  Beside a yetiv or a dehi
+    """A vowel with a ta'am or a meteg under one letter: Taamey D sets the two side by side
+    around the middle, so the vowel was off its place.  The vowel now stays where it stands
+    alone - under ה ח ת in the open space, under ש ט in the middle of the floor, under any other
+    letter where Frank Sofer puts it (Mordy, 2026-11-03: כֶ with a ta'am, בַ with a meteg - the
+    vowel moved "even though it's unnecessary") - the other mark beside it as far from it as
+    before; only when the two would then stand out past the letter is the vowel moved, by as
+    little as keeps them under it (Mordy, 2026-10-29: "only move the nikkud if necessary").  Not
+    ק (`qof_with_meteg`), the final letters, or a letter with a tail under the line (the Sefer
+    Torah fonts' ע פ א: the ta'am would meet the tail).  Beside a yetiv or a dehi
     only the vowel moves, and only away from it.  A lookup run last; a third mark under the
     letter leaves them as they were.  Returns the pairs moved, by letter."""
     import io
@@ -702,13 +707,23 @@ def centred_with_another(t: TTFont) -> dict[str, int]:
     lookups = gpos.LookupList.Lookup
     rev, order, gs = t.getReverseGlyphMap(), t.getGlyphOrder(), t.getGlyphSet()
     mark = [fr for fr in gpos.FeatureList.FeatureRecord if fr.FeatureTag == "mark"]
-    plains = {"he": "ה", "xet": "ח", "tav": "ת", "tet": "ט", "shin": "ש"}
+    upem = t["head"].unitsPerEm
+    plains = {name: chr(cp) for cp, name in t.getBestCmap().items()   # (not a letter with a tail under
+              if 0x05D0 <= cp <= 0x05EA and name in t["glyf"].glyphs   #  the line - the Stam ע, פ, א:
+              and name not in AS_THEY_ARE and _bottom(t["glyf"], name) > -0.05 * upem}   #  its marks are set by it)
 
-    def ours(lk):          # (its chain: every rule after ה ח ט ת or ש)
-        return lk.LookupType == 8 and lk.SubTable and all(
-            getattr(st, "Format", 0) == 3 and st.BacktrackCoverage
-            and {"xet", "tet"} & set(st.BacktrackCoverage[0].glyphs)
-            and not {"bet", "qof", "alef"} & set(st.BacktrackCoverage[0].glyphs) for st in lk.SubTable)
+    def ours(lk):          # (its chain: every rule after ה ח ט ת or ש - or, since 2026-11-03,
+        if lk.LookupType != 8 or not lk.SubTable:      #  after any letter, opened by "three: as they were")
+            return False
+        sts = [st for st in lk.SubTable if getattr(st, "Format", 0) == 3 and st.BacktrackCoverage]
+        if len(sts) != len(lk.SubTable):
+            return False
+        first = sts[0]
+        if (first.InputGlyphCount == 3 and not first.PosLookupRecord
+                and {"xet", "tet", "kaf", "bet"} <= set(first.BacktrackCoverage[0].glyphs)):
+            return True
+        return all({"xet", "tet"} & set(st.BacktrackCoverage[0].glyphs)
+                   and not {"bet", "qof", "alef"} & set(st.BacktrackCoverage[0].glyphs) for st in sts)
     # (done before - the Sefer Torah fonts start from Frank Sofer: its lookups taken out first)
     old = sorted({i for fr in mark for i in fr.Feature.LookupListIndex if ours(lookups[i])})
     if old:
@@ -748,19 +763,20 @@ def centred_with_another(t: TTFont) -> dict[str, int]:
     for plain, ch in plains.items():
         if plain not in glyf.glyphs:
             continue
+        middle = None
         if plain in ON_A_FLOOR:
             g = glyf[plain]
             g.recalcBounds(glyf)
             runs = _runs(t, plain, max(g.yMin, 0) + 0.08 * (g.yMax - max(g.yMin, 0)))
             middle = (runs[0][0] + runs[-1][1]) / 2
-        else:
+        elif plain in OPEN_SPACE:
             runs = _foot(t, plain)
             middle = (runs[0][1] + runs[-1][0]) / 2
         for v in vowels:
             alone = [x for x in shaped(ch + chr(v)) if x[0] != plain]
             if len(alone) != 1 or alone[0][0] not in under:
                 continue
-            vowel = alone[0][0]
+            vowel, home = alone[0][0], (alone[0][1] + alone[0][2]) / 2   # (where it stands alone)
             for o in others:
                 g = shaped(ch + chr(v) + chr(o))
                 base = next((x for x in g if x[0] == plain), None)
@@ -773,7 +789,7 @@ def centred_with_another(t: TTFont) -> dict[str, int]:
                 vx, ox = own[0], next(x for x in marks if x is not own[0])
                 letter = glyf[plain]
                 lo, hi = base[1], base[2]                              # (the letter's ink)
-                want = round(base[1] - letter.xMin + middle - (vx[1] + vx[2]) / 2)
+                want = round((base[1] - letter.xMin + middle if middle is not None else home) - (vx[1] + vx[2]) / 2)
                 if abs(want) < 4:
                     continue
                 if o in EDGE_TAAMIM:                                   # (the vowel alone, away from it)
