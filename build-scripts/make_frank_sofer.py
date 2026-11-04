@@ -62,6 +62,10 @@ def main(src: str) -> None:
     print(f"  the chataf kamatz with the kamatz katan's drop: {hataf_as_qatan(t)}")
     print(f"  a vowel kept in the middle beside a ta'am or meteg: {centred_with_another(t)}")
     t.save(OUT)
+    # (no mark touching anything in the siddurim either, found by shaping every word - Mordy,
+    #  2026-11-04: "fix the fonts for the siddur"; a revia mugrash on one letter touched)
+    import make_stam_sefarad
+    print("  siddur: " + make_stam_sefarad.fix_by_shaping(OUT, make_stam_sefarad.siddur_words()))
     _check_marks(OUT)
 
 
@@ -923,4 +927,9 @@ if __name__ == "__main__":
     print(f"  bold: a vowel and a meteg under ק: {', '.join(qof_with_meteg(t))}")
     print(f"  bold: a vowel kept in the middle beside a ta'am or meteg: {centred_with_another(t)}")
     t.save(bold)
+    # (its thicker letters: no mark touching anything in Tanach or the siddurim, found by shaping
+    #  every word - Mordy, 2026-11-04: the bold had never been checked; 115 siddur words touched)
+    import make_stam_sefarad
+    print("  bold: " + make_stam_sefarad.fix_by_shaping(bold, make_stam_sefarad.tanach_words()
+                                                         + make_stam_sefarad.siddur_words()))
     _check_marks(bold)

@@ -13,8 +13,8 @@ under the GNU GPL version 2 with the font exception (see "Licence" below).
 
 ## What is special about them
 
-- **No collisions.** Every word of Tanach (the Miqra according to the Masorah text) was shaped in each
-  font and checked: no vowel, ta'am or meteg touches a letter or another mark. In the Sefer Torah
+- **No collisions.** Every word of Tanach (the Miqra according to the Masorah text) and of the
+  siddurim (the Wikitext Sefardi siddur and Sefaria's siddurim) was shaped in each font and checked: no vowel, ta'am or meteg touches a letter or another mark. In the Sefer Torah
   fonts the marks are kept clear of the crowns (tagin) and of the letters' tails.
 - **Each ta'am in its proper place**, including the prepositive and postpositive ones
   (`build-scripts/CANTILLATION.md` lists where each one sits; `check_font_marks.py` checks it).
@@ -63,5 +63,5 @@ sources: `make_frank_sofer.py` (from Taamey D), `make_bold.py`, `make_stam_sefar
 Culmus Stam fonts; `--ashkenaz` for the Ashkenazi one), and the steps they run (`add_shva_na.py`,
 `add_dagesh_hazaq.py`, `add_qamats_qatan.py`, `place_meteg.py`, `clear_meteg.py`,
 `check_font_marks.py`). They are copied from the Sofer project as they are, so they expect its
-folders (and, for the collision search over Tanach, its text library); they are here so every change
+folders (and, for the collision search over Tanach and the siddurim, its text library); they are here so every change
 to the fonts can be seen and repeated.

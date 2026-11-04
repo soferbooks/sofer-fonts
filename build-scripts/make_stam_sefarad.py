@@ -234,6 +234,8 @@ def main(stam_path: str) -> None:
     words = clear_meteg.siddur_words()
     words.update(clear_meteg.tanach_words())
     print("  " + clear_meteg.clear(OUT, words))
+    # (the siddurim's words too, last - Mordy, 2026-11-04: "fix the fonts for the siddur")
+    print("  siddur: " + fix_by_shaping(OUT, siddur_words()))
     _check_marks(OUT)
     for line in report:
         print("  ", line)
@@ -894,6 +896,63 @@ def _word_collisions(T, hbfont, word, marks_set, masks):
     return g, out
 
 
+def _two_vowels(word: str) -> bool:
+    """A letter with two vowels under it (a typing mistake: זֵֽכֵֶר), not two readings kept apart
+    by a CGJ (U+034F, the Ten Commandments, ירושלַ͏ִם)."""
+    import re as _re
+    for cluster in _re.findall("[א-ת][^א-ת]*", word):
+        if "͏" in cluster:
+            continue
+        if len(_re.findall("[ְ-ׇֻ]", cluster)) > 1:
+            return True
+    return False
+
+
+def siddur_words() -> list[str]:
+    """Every word with marks of the siddurim Sofer prints in the siddur look (Mordy, 2026-11-04:
+    "fix the fonts for the siddur"): the Wikitext Sefardi siddur as printed (its own marks -
+    word_layout.from_wikisource) and Sefaria's siddurim (Liturgy/Siddur, Hebrew).  A word with
+    two vowels under one letter is a mistake in the text (fixed there), not given a rule.
+    [] when the library is not here."""
+    import json
+    import re as _re
+    sys.path.insert(0, str(ROOT / "src"))
+    words = set()
+
+    def add(text):
+        text = _re.sub(r"<[^>]*>|&[a-z#0-9]+;", " ", text)
+        for w in _re.split(r"[\s־]+", text):
+            w = _re.sub(r"[^֑-׉א-תﬞ͏]", "", w)
+            if _re.search("[א-ת]", w) and _re.search("[֑-ׇ]", w) and not _two_vowels(w):
+                words.add(w)
+    data = ROOT / "data" / "sefaria-export"
+    try:
+        from sofer import word_layout
+        folder = word_layout.folder_for(data) / "siddur-edot-hamizrach"
+        if folder.is_dir():
+            for sec in word_layout.from_wikisource(folder):
+                for it in sec.items:
+                    for para in ([it] if it[0] == "p" else it[2] if it[0] == "cols" else []):
+                        add("".join(r[0] for r in para[2]))
+    except Exception as exc:                 # (no library here: Tanach and Sefaria's siddurim only)
+        print(f"  (the Wikitext siddur not read: {exc})")
+
+    def walk(x):
+        if isinstance(x, list):
+            for y in x:
+                walk(y)
+        elif isinstance(x, dict):
+            for y in x.values():
+                walk(y)
+        elif isinstance(x, str):
+            add(x)
+    root = data / "json" / "Liturgy" / "Siddur"
+    for f in root.rglob("Hebrew/*.json") if root.is_dir() else ():
+        if f.name != "merged.json":
+            walk(json.loads(f.read_text(encoding="utf-8")).get("text", []))
+    return sorted(words)
+
+
 def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
     """What the rules above miss - a mark set by Taamey D's own context rules: every word of
     Tanach shaped (HarfBuzz) and, where a mark still meets another glyph (Mordy, 2026-10-22:
@@ -1005,7 +1064,7 @@ def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
         todo = left_words
     hbfont = hb.Font(hb.Face(hb.Blob(Path(path).read_bytes())))  # (in memory: the file is written again)
     still = [w for w in words if _word_collisions(T, hbfont, w, marks_set, masks)[1]]
-    return (f"shaped every word of Tanach: {total} with a collision, {fixed} rules added; "
+    return (f"shaped every word: {total} with a collision, {fixed} rules added; "
             f"{len(still)} left" + (f" ({' '.join(still[:8])})" if still else ""))
 
 
