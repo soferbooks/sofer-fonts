@@ -62,10 +62,12 @@ def main(src: str) -> None:
     print(f"  the chataf kamatz with the kamatz katan's drop: {hataf_as_qatan(t)}")
     print(f"  a vowel kept in the middle beside a ta'am or meteg: {centred_with_another(t)}")
     t.save(OUT)
-    # (no mark touching anything in the siddurim either, found by shaping every word - Mordy,
-    #  2026-11-04: "fix the fonts for the siddur"; a revia mugrash on one letter touched)
+    # (no mark touching anything in Tanach or the siddurim, found by shaping every word - Mordy,
+    #  2026-11-04: "fix the fonts for the siddur"; a revia mugrash on one letter touched; and a
+    #  mark under ר's stroke slid back where it would touch the mark of the letter before)
     import make_stam_sefarad
-    print("  siddur: " + make_stam_sefarad.fix_by_shaping(OUT, make_stam_sefarad.siddur_words()))
+    print("  Tanach and siddur: " + make_stam_sefarad.fix_by_shaping(
+        OUT, make_stam_sefarad.tanach_words() + make_stam_sefarad.siddur_words()))
     _check_marks(OUT)
 
 
@@ -103,7 +105,7 @@ def raise_below(t: TTFont) -> int:
 
 # Where Frank Ruehl centres a mark under these letters: its share of the letter's ink width,
 # from the right (measured with HarfBuzz, 2026-10-21; Taamey D: 0.5, the middle)
-UNDER_LEG = {"resh": 0.20, "dalet": 0.30, "vav": None}     # (ו: under its stroke, measured - Mordy, 2026-10-21)
+UNDER_LEG = {"resh": None, "dalet": 0.30, "vav": None}     # (ו, ר: under its stroke, measured - Mordy, 2026-10-21; ר 2026-11-04: it was a little left of it)
 
 
 def _runs(t: TTFont, name: str, y: float, step: int = 4) -> list[tuple[int, int]]:
@@ -425,13 +427,16 @@ def under_the_leg(t: TTFont) -> list[str]:
     # (a font that has it already: its lookups are the last ones, taken out first)
     mark = [fr for fr in gpos.FeatureList.FeatureRecord if fr.FeatureTag == "mark"]
     def ours(lk):
-        return lk.LookupType == 8 and all(
+        # (a saved font may hold it wrapped as an extension lookup - the Sefer Torah fonts do)
+        subs = [getattr(st, "ExtSubTable", st) for st in lk.SubTable]
+        kind = lk.SubTable[0].ExtensionLookupType if lk.LookupType == 9 and lk.SubTable else lk.LookupType
+        return kind == 8 and all(
             getattr(st, "Format", 0) == 3 and st.BacktrackCoverage
             and all(g.startswith(tuple(UNDER_LEG)) for g in st.BacktrackCoverage[0].glyphs)
-            for st in lk.SubTable)
+            for st in subs)
     old = sorted({i for fr in mark for i in fr.Feature.LookupListIndex if ours(lookups[i])})
     if old:
-        nested = [r.LookupListIndex for i in old for st in lookups[i].SubTable for r in st.PosLookupRecord]
+        nested = [r.LookupListIndex for i in old for st in lookups[i].SubTable for r in getattr(st, "ExtSubTable", st).PosLookupRecord]
         first = min(old + nested)
         drop = set(range(first, len(lookups)))
         for fr in gpos.FeatureList.FeatureRecord:
@@ -484,6 +489,9 @@ def under_the_leg(t: TTFont) -> list[str]:
     for bases, _ in moves:              # (a vowel and a ta'am: left as they are)
         subtables.append(_chain(otl, ot, rev, bases, under, 2, None))
     for bases, _ in moves:              # (a ta'am under the letter before - the יּ's tevir in
+        bases = [g for g in bases if not g.startswith("resh")]  # (not ר: under its stroke there too,
+        if not bases:                   #  slid back only as far as clears - fix_by_shaping; Mordy,
+            continue                    #  2026-11-04: Bereishis 22:4's וַיַּ֥רְא had it in the middle)
         for back in (1, 2):             #  וַיֵּ֛רֶד: moved under the leg the vowel touched it; left)
             subtables.append(_chain(otl, ot, rev, bases, below, 1, None, [taam_under] + [under] * (back - 1)))
     for bases, index in moves:          # (one mark: under the leg)

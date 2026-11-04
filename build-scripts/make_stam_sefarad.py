@@ -640,8 +640,22 @@ PREPOSITIVE_BELOW = ("dexi", "yetiv")      # (set at a letter's right, beside it
 NEIGHBOUR_GAP = 12      # between a mark and the letter beside its own: only clear of it
 
 
+_FAT: dict = {}
+
+
 def _fat(m, gap: int = INK_GAP):
-    """A glyph's picture grown by ``gap`` all round."""
+    """A glyph's picture grown by ``gap`` all round (each picture grown once: the shaping
+    checks ask for the same few thousands of times - 2026-11-04, a run took hours)."""
+    key = (id(m), gap)
+    hit = _FAT.get(key)
+    if hit is not None and hit[0] is m:
+        return hit[1]
+    out = _fat_now(m, gap)
+    _FAT[key] = (m, out)
+    return out
+
+
+def _fat_now(m, gap: int):
     from PIL import Image, ImageFilter
     g = max(1, gap // _SC)
     big = Image.new("L", (m[2].size[0] + 2 * g, m[2].size[1] + 2 * g), 0)
@@ -953,6 +967,32 @@ def siddur_words() -> list[str]:
     return sorted(words)
 
 
+SLIDE_UNDER = ("resh", "dalet", "vav")    # (letters whose mark below is set under the leg / stroke)
+SLIDE_MAX = 330                          # (back to the letter's middle at most, font units)
+SLIDE_GAP = 80                           # (and the least room it keeps from the letter beside's marks:
+                                         #  10 units looked touching in print - Mordy, 2026-11-04)
+
+
+def _slide_pairs(T, g, marks_set, masks):
+    """[(i, j)]: a mark below ר / ד / ו (SLIDE_UNDER) closer than SLIDE_GAP to a glyph of
+    another letter - the shva under ר's stroke beside the merkha of the yod before it."""
+    def mask(n):
+        if n not in masks:
+            masks[n] = _mask(T, n)
+        return masks[n]
+    bases = {c: name for name, c, *_r in g if name not in marks_set}
+    out = []
+    for i, (name, c, x, y) in enumerate(g):
+        if name not in marks_set or not bases.get(c, "").startswith(SLIDE_UNDER)                 or mask(name) is None or mask(name)[1] * _SC + y > 0:      # (marks below the line only)
+            continue
+        for j, (n2, c2, x2, y2) in enumerate(g):
+            if c2 == c or mask(name) is None or mask(n2) is None:
+                continue
+            if _touch(_fat(mask(n2), SLIDE_GAP), mask(name), x - x2, y - y2):
+                out.append((min(i, j), max(i, j)))
+    return out
+
+
 def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
     """What the rules above miss - a mark set by Taamey D's own context rules: every word of
     Tanach shaped (HarfBuzz) and, where a mark still meets another glyph (Mordy, 2026-10-22:
@@ -975,6 +1015,7 @@ def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
         left_words = []
         for w in todo:
             g, pairs = _word_collisions(T, hbfont, w, marks_set, masks)
+            pairs = pairs + [pr for pr in _slide_pairs(T, g, marks_set, masks) if pr not in pairs]
             if not pairs:
                 continue
             left_words.append(w)
@@ -1005,6 +1046,24 @@ def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
                 bases = {c: k for k, (name, c, *_r) in enumerate(g) if name not in marks_set}
                 if ci not in bases or cj not in bases:
                     continue
+                # (but a mark set under ר / ד's leg or ו's stroke slides back toward its letter's
+                #  middle, as little as clears - Mordy, 2026-11-04: the shva under ר's stroke,
+                #  except beside the mark of the letter before: וַיֵּ֥רֶד)
+                slid = next((k for k in (i, j) if g[k][0] in marks_set and masks.get(g[k][0])
+                             and masks[g[k][0]][1] * _SC + g[k][3] <= 0
+                             and g[bases[g[k][1]]][0].startswith(SLIDE_UNDER)), None)
+                if slid is not None:
+                    other = j if slid == i else i
+                    sign = 1 if g[slid][2] > g[other][2] else -1
+                    d = next((d for d in range(6, SLIDE_MAX + 1, 6) if not _touch(
+                        _fat(masks[g[other][0]], SLIDE_GAP), masks[g[slid][0]],
+                        g[slid][2] + sign * d - g[other][2], g[slid][3] - g[other][3])), None)
+                    if d is not None:
+                        n = pos[slid]
+                        key = (tuple(seq[:n]), seq[n], tuple(seq[n + 1:]), "x")
+                        old = rules.get(key, (0, 0))
+                        rules[key] = (sign * d, 0) if d > abs(old[0]) else old
+                        continue
                 left_c = ci if g[bases[ci]][2] < g[bases[cj]][2] else cj
                 lb = bases[left_c]
                 moving = [k for k in (i, j) if g[k][1] != left_c]
@@ -1063,7 +1122,8 @@ def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
         T = TTFont(path)
         todo = left_words
     hbfont = hb.Font(hb.Face(hb.Blob(Path(path).read_bytes())))  # (in memory: the file is written again)
-    still = [w for w in words if _word_collisions(T, hbfont, w, marks_set, masks)[1]]
+    still = [w for w in words if _word_collisions(T, hbfont, w, marks_set, masks)[1]
+             or _slide_pairs(T, _shaped(hbfont, w), marks_set, masks)]
     return (f"shaped every word: {total} with a collision, {fixed} rules added; "
             f"{len(still)} left" + (f" ({' '.join(still[:8])})" if still else ""))
 
