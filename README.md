@@ -34,7 +34,7 @@ under the GNU GPL version 2 with the font exception (see "Licence" below).
   ([hbofonts](https://bdenckla.github.io/hbofonts/)), whose letters come from Yoram Gnat's
   **Taamey Frank CLM** (Culmus). It is renamed because Taamey D's licence reserves that name. Our
   changes: the marks under the line raised closer to the letter, the placements above, the kamatz
-  katan, the shva na and dagesh chazak, the bold, and the collision fixes.
+  katan, the shva na and dagesh chazak, and the bold.
 - **Sofer Stam Ashkenaz / Sefarad** take their letters from Yoram Gnat's **Stam Ashkenaz CLM** and
   **Stam Sefarad CLM** ([Culmus](https://culmus.sourceforge.io)), and their nikud, ta'amim and mark
   placement from Frank Sofer, with every mark moved clear of the Stam letters' shapes.
