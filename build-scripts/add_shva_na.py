@@ -43,17 +43,46 @@ def files() -> list[str]:
     return out
 
 
+def dot_box(points: list) -> tuple[float, float, float, float]:
+    """A dot's drawn edges (xMin, yMin, xMax, yMax): its outline's curves measured, not its control
+    points - an off-curve point stands outside the round dot and on one side only, so squares set
+    about the control points' middle stood 17 (shva na) and 27 (dagesh chazak) units left of the dot
+    in Frank Sofer (Mordy, 2026-11-16: "the nikkud not under the stroke of the ר, but a little to the
+    left").  ``points``: [((x, y), on_curve)] of one contour."""
+    from fontTools.pens.boundsPen import BoundsPen
+    if not any(on for _, on in points):                  # (a round dot of curve points only)
+        pen = BoundsPen(None)
+        pen.qCurveTo(*[xy for xy, _ in points], None)
+        pen.closePath()
+        return pen.bounds
+    start = next(i for i, (_, on) in enumerate(points) if on)
+    seq = points[start:] + points[:start]
+    pen = BoundsPen(None)
+    pen.moveTo(seq[0][0])
+    offs = []
+    for xy, on in seq[1:] + [seq[0]]:
+        if on:
+            pen.qCurveTo(*offs, xy) if offs else pen.lineTo(xy)
+            offs = []
+        else:
+            offs.append(xy)
+    if offs:
+        pen.qCurveTo(*offs, seq[0][0])
+    pen.closePath()
+    return pen.bounds
+
+
 def _squares(t: TTFont, sheva: str, size: float = SQUARE):
     """The shva's dots as squares, each about its dot's centre (``size``: a side by the dot's width)."""
     glyf = t["glyf"]
-    coords, ends, _ = glyf[sheva].getCoordinates(glyf)
+    coords, ends, flags = glyf[sheva].getCoordinates(glyf)
     pen, start = TTGlyphPen(None), 0
     for end in ends:
-        pts = coords[start:end + 1]
+        pts = [(tuple(coords[i]), bool(flags[i] & 1)) for i in range(start, end + 1)]
         start = end + 1
-        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-        h = (max(xs) - min(xs)) * size / 2
+        x0, y0, x1, y1 = dot_box(pts)
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        h = (x1 - x0) * size / 2
         # (clockwise, as TrueType's outer contours)
         for i, (x, y) in enumerate(((cx - h, cy - h), (cx - h, cy + h), (cx + h, cy + h), (cx + h, cy - h))):
             (pen.moveTo if i == 0 else pen.lineTo)((round(x), round(y)))
@@ -170,6 +199,7 @@ def resquare(path: Path) -> str:
     for n in ("shevana", "dageshxazaq"):
         if n in glyf.glyphs:
             glyf[n].recalcBounds(glyf)
+            t["hmtx"][n] = (t["hmtx"][n][0], glyf[n].xMin)     # (its bearing its new left edge - fix_lsb.py)
     t.save(path)
     return f"{path.name}: {', '.join(done) or 'nothing'} drawn as its dots squared"
 

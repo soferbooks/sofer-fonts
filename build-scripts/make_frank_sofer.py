@@ -61,6 +61,7 @@ def main(src: str) -> None:
     print(f"  a vowel and a meteg under ק moved under it: {', '.join(qof_with_meteg(t))}")
     print(f"  the chataf kamatz with the kamatz katan's drop: {hataf_as_qatan(t)}")
     print(f"  a vowel kept in the middle beside a ta'am or meteg: {centred_with_another(t)}")
+    print(f"  the chirik of ירושלם under the ם's corner: {orphan_under_mem(t)}")
     t.save(OUT)
     # (no mark touching anything in Tanach or the siddurim, found by shaping every word - Mordy,
     #  2026-11-04: "fix the fonts for the siddur"; a revia mugrash on one letter touched; and a
@@ -133,7 +134,8 @@ def _foot(t: TTFont, name: str) -> list[tuple[int, int]]:
     return _runs(t, name, max(g.yMin, 0) + 0.08 * (g.yMax - max(g.yMin, 0)))
 
 
-OPEN_SPACE = ("he", "xet", "tav")     # (the letters standing on two legs)
+OPEN_SPACE = ("he", "xet", "tav", "gimel")     # (the letters standing on two legs; ג - Mordy, 2026-11-16:
+                                               #  "centered under the legs of the ג")
 ON_A_FLOOR = {"shin": ("shin", "trueshin", "sin"), "tet": ("tet",)}   # (and those on a floor)
 
 
@@ -378,6 +380,55 @@ def qof_with_meteg(t: TTFont) -> list[str]:
         fr.Feature.LookupListIndex.append(len(lookups) - 1)
         fr.Feature.LookupCount = len(fr.Feature.LookupListIndex)
     return allv
+
+
+def orphan_under_mem(t: TTFont) -> int:
+    """The chirik of ירושלם written without its yod (after a joiner, Taamey D's xiriq.orphan, hung on
+    the ל) set under the right corner of the ם after it, not in the gap between the two letters,
+    where it met the marks under the ל (Mordy, 2026-11-16: "hirrik belonging to missing י in tanach
+    ירושלם should move under the corner of ם").  Measured: the ם's right stroke, its advance."""
+    if "xiriq.orphan" not in t["glyf"].glyphs or "finalmem" not in t["glyf"].glyphs:
+        return 0
+    runs = _runs(t, "finalmem", 0.4 * t["glyf"]["finalmem"].yMax)
+    if not runs:
+        return 0
+    corner = (runs[-1][0] + runs[-1][1]) / 2 - t["hmtx"]["finalmem"][0]     # (from the ל's origin)
+    cmap = t.getBestCmap()
+    joiners = {cmap[cp] for cp in (0x200D, 0x034F, 0x200C) if cp in cmap}    # (it hangs on the joiner before it)
+    done = 0
+    for lk in t["GPOS"].table.LookupList.Lookup:
+        for st in lk.SubTable:
+            st = getattr(st, "ExtSubTable", st)
+            if type(st).__name__ != "MarkBasePos" or "xiriq.orphan" not in st.MarkCoverage.glyphs:
+                continue
+            rec = st.MarkArray.MarkRecord[st.MarkCoverage.glyphs.index("xiriq.orphan")]
+            for name, base in zip(st.BaseCoverage.glyphs, st.BaseArray.BaseRecord):
+                a = base.BaseAnchor[rec.Class]
+                if a is not None and (name in joiners or name == "lamed" or name.startswith(("lamed.", "lameddagesh"))):
+                    import copy
+                    a = base.BaseAnchor[rec.Class] = copy.deepcopy(a)        # (an anchor may be shared)
+                    a.XCoordinate = round(corner + rec.MarkAnchor.XCoordinate)
+                    done += 1
+    # (the joiner's own glyph - the siddur writes ירושלם with a zero-width joiner - had no anchor for
+    #  the chirik, so it stayed at the gap: a lookup of its own, once)
+    from fontTools.otlLib import builder as otl
+    gpos, rev = t["GPOS"].table, t.getReverseGlyphMap()
+    covered = {g for lk in gpos.LookupList.Lookup for st in lk.SubTable
+               if type(getattr(st, "ExtSubTable", st)).__name__ == "MarkBasePos"
+               and "xiriq.orphan" in getattr(st, "ExtSubTable", st).MarkCoverage.glyphs
+               for g in getattr(st, "ExtSubTable", st).BaseCoverage.glyphs}
+    new = sorted(g for g in joiners if g in rev and g not in covered)
+    if new:
+        st = otl.buildMarkBasePosSubtable({"xiriq.orphan": (0, otl.buildAnchor(0, 0))},
+                                          {g: {0: otl.buildAnchor(round(corner), 0)} for g in new}, rev)
+        gpos.LookupList.Lookup.append(otl.buildLookup([st], table="GPOS"))
+        gpos.LookupList.LookupCount = len(gpos.LookupList.Lookup)
+        for fr in gpos.FeatureList.FeatureRecord:
+            if fr.FeatureTag == "mark":
+                fr.Feature.LookupListIndex.append(gpos.LookupList.LookupCount - 1)
+                fr.Feature.LookupCount = len(fr.Feature.LookupListIndex)
+        done += 1
+    return done
 
 
 def holam_male(t: TTFont) -> bool:
@@ -785,14 +836,16 @@ def centred_with_another(t: TTFont) -> dict[str, int]:
             runs = _foot(t, plain)
             middle = (runs[0][1] + runs[-1][0]) / 2
         for v in vowels:
-            alone = [x for x in shaped(ch + chr(v)) if x[0] != plain]
+            # (the letter in any of its forms - א is shaped as its "alef.con": Mordy, 2026-11-16,
+            #  קִנְאָֽתְךָ's vowel moved for the meteg)
+            alone = [x for x in shaped(ch + chr(v)) if not _family(x[0], (plain,))]
             if len(alone) != 1 or alone[0][0] not in under:
                 continue
             vowel, home = alone[0][0], (alone[0][1] + alone[0][2]) / 2   # (where it stands alone)
             for o in others:
                 g = shaped(ch + chr(v) + chr(o))
-                base = next((x for x in g if x[0] == plain), None)
-                marks = [x for x in g if x[0] != plain]
+                base = next((x for x in g if _family(x[0], (plain,))), None)
+                marks = [x for x in g if not _family(x[0], (plain,))]
                 if base is None or len(marks) != 2 or not all(x[0] in under for x in marks):
                     continue
                 own = [x for x in marks if x[0] == vowel]
@@ -810,7 +863,15 @@ def centred_with_another(t: TTFont) -> dict[str, int]:
                         continue
                     dx = min(want, hi - vx[2]) if away > 0 else max(want, lo - vx[1])
                     both = False
+                elif o == 0x05BD:
+                    # (beside a meteg the vowel stays where it stands alone, the meteg beside it, even
+                    #  if the two then stand out past the letter - Mordy, 2026-11-16: "nikkud is
+                    #  getting moved with meteg even if there is no need", under נ of לְפָנֶֽיךָ, א of
+                    #  קִנְאָֽתְךָ, ע of מֵעַֽיִךְ; a meteg that would touch the next letter's mark is kept
+                    #  clear by setting the letters apart - make_stam_sefarad.fix_by_shaping)
+                    dx, both = round(want), True
                 else:
+                    # (beside a ta'am: moved only as far as keeps the two under the letter)
                     left, right = lo - min(vx[1], ox[1]), hi - max(vx[2], ox[2])
                     if left > right:
                         continue
@@ -912,8 +973,13 @@ def _shva_na(path) -> None:
 
 
 def _check_marks(path) -> None:
-    """Every ta'am in its place (fonts/CANTILLATION.md)?"""
+    """Every glyph's bearing its outline's left edge (scripts/fix_lsb.py), then: every ta'am in its
+    place (fonts/CANTILLATION.md)?"""
     import importlib.util
+    spec = importlib.util.spec_from_file_location("fix_lsb", ROOT / "scripts" / "fix_lsb.py")
+    lsb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lsb)
+    print(f"  bearings put right: {lsb.fix(Path(path))}")
     spec = importlib.util.spec_from_file_location("check_font_marks", ROOT / "scripts" / "check_font_marks.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -922,8 +988,33 @@ def _check_marks(path) -> None:
     for p in problems[:20]:
         print("   ", p)
 
+def refresh() -> None:
+    """The placement steps run again on the built Frank Sofer, with no new base (Taamey D's 0.931, which
+    it was made from, is no longer published): the shva na and dagesh chazak squared again, the marks
+    under the open letters placed again, then the vowel beside a ta'am or meteg - which first takes out
+    its own lookups and every one after it, the collision rules among them - the ירושלם chirik, and
+    the collisions found again by shaping every word (Mordy, 2026-11-16).
+
+        python scripts/make_frank_sofer.py --refresh
+    """
+    _shva_na(OUT)
+    t = TTFont(OUT)
+    print(f"  under the open space: {', '.join(under_open_space(t))}")
+    print(f"  a vowel kept in its place beside a ta'am or meteg: {centred_with_another(t)}")
+    print(f"  the chirik of ירושלם under the ם's corner: {orphan_under_mem(t)}")
+    t.save(OUT)
+    import make_stam_sefarad
+    print("  Tanach and siddur: " + make_stam_sefarad.fix_by_shaping(
+        OUT, make_stam_sefarad.tanach_words() + make_stam_sefarad.siddur_words()))
+    _check_marks(OUT)
+
+
 if __name__ == "__main__":
-    main(sys.argv[1])
+    if sys.argv[1] == "--refresh":
+        sys.path.insert(0, str(Path(__file__).parent))
+        refresh()
+    else:
+        main(sys.argv[1])
     # (and its bold, made from it - scripts/make_bold.py; Mordy, 2026-10-26)
     sys.path.insert(0, str(Path(__file__).parent))
     import make_bold

@@ -65,6 +65,13 @@ def make(src: Path, out: Path) -> str:
         new = _embolden(coords, list(g.endPtsOfContours), sx * k, sy * k)
         if not mark:
             new = [(x + round(sx / 2), y) for x, y in new]
+        elif coords:
+            # (a mark kept about its own middle: the thickening grew it to one side, so every vowel
+            #  of the bold stood about 21 units right of its place - Mordy, 2026-11-16: "the nikkud
+            #  under a tav is not centered under the opening")
+            was = (min(x for x, _ in coords) + max(x for x, _ in coords)) / 2
+            now = (min(x for x, _ in new) + max(x for x, _ in new)) / 2
+            new = [(x - round(now - was), y) for x, y in new]
         g.coordinates[:] = new
         g.recalcBounds(glyf)
         if not mark:
@@ -108,6 +115,10 @@ def make(src: Path, out: Path) -> str:
     t["OS/2"].fsSelection = (t["OS/2"].fsSelection | 0x20) & ~0x40
     t["head"].macStyle |= 1
     t.save(out)
+    # (each outline's bearing its left edge: the thickened marks kept their old one, so FreeType -
+    #  Chrome, Android - drew them 21 units aside; scripts/fix_lsb.py)
+    import fix_lsb
+    fix_lsb.fix(out)
     return f"{out.name}: {family} Bold"
 
 

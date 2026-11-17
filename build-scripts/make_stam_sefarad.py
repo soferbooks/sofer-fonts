@@ -967,7 +967,8 @@ def siddur_words() -> list[str]:
     return sorted(words)
 
 
-SLIDE_UNDER = ("resh", "dalet", "vav")    # (letters whose mark below is set under the leg / stroke)
+SLIDE_UNDER = ("dalet", "vav")    # (letters whose mark below is set under the leg / stroke; not ר since
+                                  #  2026-11-16 - Mordy: its vowel under the stroke, the letters set apart)
 SLIDE_MAX = 330                          # (back to the letter's middle at most, font units)
 SLIDE_GAP = 80                           # (and the least room it keeps from the letter beside's marks:
                                          #  10 units looked touching in print - Mordy, 2026-11-04)
@@ -994,6 +995,31 @@ def _slide_pairs(T, g, marks_set, masks):
 
 
 def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
+    """fix_by_shaping_() and then, for the words it left, the mark under ר allowed to slide back toward
+    the letter's middle as well - only where nothing else clears it (Mordy, 2026-11-16: ר's vowel under
+    its stroke; דֶ֤רֶךְ's ד has no room for its segol and ta'am beside ר's)."""
+    global SLIDE_UNDER
+    before = Path(path).read_bytes()
+    first = fix_by_shaping_(path, words, rounds)
+    left = list(_left_words)
+    if not left:
+        return first
+    # (those words' rules made again from the font as it was: the others as before, these with ר's
+    #  mark sliding - the first pass's rules for them had moved the marks of the letter before into
+    #  each other, which later rules could not undo)
+    Path(path).write_bytes(before)
+    others = fix_by_shaping_(path, [w for w in words if w not in set(left)], rounds)
+    was, SLIDE_UNDER = SLIDE_UNDER, SLIDE_UNDER + ("resh",)
+    try:
+        return others + f"; {len(left)} with ר's mark sliding back: " + fix_by_shaping_(path, left, rounds)
+    finally:
+        SLIDE_UNDER = was
+
+
+_left_words: list = []
+
+
+def fix_by_shaping_(path, words: list[str], rounds: int = 6) -> str:
     """What the rules above miss - a mark set by Taamey D's own context rules: every word of
     Tanach shaped (HarfBuzz) and, where a mark still meets another glyph (Mordy, 2026-10-22:
     "remove all collisions"), a rule for exactly that word's letters and marks - the letters
@@ -1124,6 +1150,7 @@ def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
     hbfont = hb.Font(hb.Face(hb.Blob(Path(path).read_bytes())))  # (in memory: the file is written again)
     still = [w for w in words if _word_collisions(T, hbfont, w, marks_set, masks)[1]
              or _slide_pairs(T, _shaped(hbfont, w), marks_set, masks)]
+    _left_words[:] = still
     return (f"shaped every word: {total} with a collision, {fixed} rules added; "
             f"{len(still)} left" + (f" ({' '.join(still[:8])})" if still else ""))
 
@@ -1159,8 +1186,13 @@ def _under_the_leg(path) -> None:
 
 
 def _check_marks(path) -> None:
-    """Every ta'am in its place (fonts/CANTILLATION.md)?"""
+    """Every glyph's bearing its outline's left edge (scripts/fix_lsb.py), then: every ta'am in its
+    place (fonts/CANTILLATION.md)?"""
     import importlib.util
+    spec = importlib.util.spec_from_file_location("fix_lsb", ROOT / "scripts" / "fix_lsb.py")
+    lsb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lsb)
+    print(f"  bearings put right: {lsb.fix(Path(path))}")
     spec = importlib.util.spec_from_file_location("check_font_marks", ROOT / "scripts" / "check_font_marks.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

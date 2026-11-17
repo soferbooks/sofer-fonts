@@ -43,10 +43,11 @@ def _contours(t: TTFont, name: str) -> list:
 
 
 def _square(pen, pts) -> None:
-    """A square about the dot's centre (add_shva_na.SQUARE times its width), clockwise."""
-    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    h = (max(xs) - min(xs)) * sn.SQUARE / 2
+    """A square about the dot's centre (add_shva_na.SQUARE times its width), clockwise; ``pts``: the
+    dot's [((x, y), on_curve)] - its drawn edges measured (add_shva_na.dot_box)."""
+    x0, y0, x1, y1 = sn.dot_box(pts)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    h = (x1 - x0) * sn.SQUARE / 2
     for i, (x, y) in enumerate(((cx - h, cy - h), (cx - h, cy + h), (cx + h, cy + h), (cx + h, cy - h))):
         (pen.moveTo if i == 0 else pen.lineTo)((round(x), round(y)))
     pen.closePath()
@@ -91,7 +92,7 @@ def _twin(t: TTFont, name: str, dagesh: str, dot: tuple) -> object:
     for contour in _contours(t, name):
         xs, ys = [p[0][0] for p in contour], [p[0][1] for p in contour]
         if not found and abs(max(xs) - min(xs) - dw) < dw * 0.25 and abs(max(ys) - min(ys) - dh) < dh * 0.25:
-            _square(pen, [p[0] for p in contour])
+            _square(pen, contour)
             found = True
         else:
             _draw(pen, contour)
@@ -192,7 +193,7 @@ def make(path: Path) -> str:
             table.cmap[0x05C9] = INPUT
     pen = TTGlyphPen(None)
     for c in _contours(t, dagesh):
-        _square(pen, [p[0] for p in c])
+        _square(pen, c)
     sn._add_glyph(t, NAME, pen.glyph(), t["hmtx"][dagesh])
     sn._as_mark_like(t, NAME, dagesh)
     glyf[dagesh].recalcBounds(glyf)
