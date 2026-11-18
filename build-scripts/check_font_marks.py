@@ -81,7 +81,9 @@ def check_font(path: Path) -> list[str]:
                     "above, right edge": above and mc >= lx0 + 0.6 * w,
                     "above": above and lx0 - 0.15 * w <= mc <= lx1 + 0.15 * w,
                     "below": below and lx0 - 0.15 * w <= mc <= lx1 + 0.15 * w,
-                    "below, right edge": below and mc >= lx0 + 0.6 * w,
+                    # (the dehi and yetiv: with no vowel under the letter, in its middle, as Sefaria
+                    #  sets them - Mordy, 2026-11-18 - never on its left side)
+                    "below, right edge": below and mc >= lx0 + 0.4 * w,
                 }[group]
                 if not ok:
                     problems.append(f"{path.name}: U+{mark:04X} on {letter} is not {group}")
