@@ -13,6 +13,10 @@ licence reserves its name for the unchanged font).
 """
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _P
+_sys.path.insert(0, str(_P(__file__).resolve().parent))
+
 import io
 import sys
 from collections import Counter
@@ -236,6 +240,7 @@ def _arrange(path: Path, words: Counter) -> int:
                 fr.Feature.LookupCount = len(fr.Feature.LookupListIndex)
     gpos.LookupList.LookupCount = len(lookups)
     buf = io.BytesIO()
+    __import__('gpos_ext').as_extensions(t)
     t.save(buf)
     t.close()
     path.write_bytes(buf.getvalue())
@@ -272,9 +277,11 @@ def clear(path: Path, words: Counter, rounds: int = 6) -> str:
                 if got is None:
                     continue
                 kind, on, amount = got
-                # (the context: the letters on either side of the meteg's own, with their marks)
+                # (the context: the whole word, with its marks)
                 c = clusters.index(placed[i][1])
-                keep = set(clusters[max(0, c - 1):c + 2])
+                # (the whole word: the letters beside it were not enough - נֶֽגֶב and נֶֽגֶד need the meteg moved
+                #  opposite ways, and the rules for each undid the other: Drugulin, 2026-11-17)
+                keep = set(clusters)
                 span = [m for m, k in enumerate(logical) if placed[k][1] in keep]
                 lo, hi, at = span[0], span[-1], pos[on]
                 key = (tuple(names[lo:at]), names[at], tuple(names[at + 1:hi + 1]), kind)
@@ -332,6 +339,7 @@ def _add(path: Path, rules: dict) -> None:
                 fr.Feature.LookupCount = len(fr.Feature.LookupListIndex)
     gpos.LookupList.LookupCount = len(lookups)
     buf = io.BytesIO()
+    __import__('gpos_ext').as_extensions(t)
     t.save(buf)
     t.close()
     path.write_bytes(buf.getvalue())

@@ -123,5 +123,12 @@ def make(src: Path, out: Path) -> str:
 
 
 if __name__ == "__main__":
+    # (--strength S: less thickening for a font already heavy - Drugulin's bold is 0.018, about half of
+    #  Frank Sofer's; its marks then stay clear - 2026-11-17)
+    if "--strength" in sys.argv:
+        i = sys.argv.index("--strength")
+        STRENGTH = float(sys.argv[i + 1])
+        STRENGTH_Y = round(STRENGTH * 0.7, 4)
+        del sys.argv[i:i + 2]
     src = Path(sys.argv[1] if len(sys.argv) > 1 else "fonts/FrankSofer.ttf")
     print(make(src, src.with_name(src.stem + "-Bold.ttf")))

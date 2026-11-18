@@ -28,6 +28,7 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 FRANK = ROOT / "fonts" / "FrankSofer.ttf"        # (Taamey D with our kamatz katan; Taamey Frank CLM until 2026-10-21)
 OUT = ROOT / "fonts" / "SoferStamSefarad.ttf"
 FAMILY = "Sofer Stam Sefarad"
@@ -90,6 +91,14 @@ class Mapping:
 
 def main(stam_path: str) -> None:
     T, S = TTFont(FRANK), TTFont(stam_path)
+    # (letters drawn on another grid - Drugulin CLM's 1,200 units to the em, Frank Sofer's 2,048 - are
+    #  scaled to Frank's first: copied as they were, they came out at 59% of their size, 2026-11-17)
+    if S["head"].unitsPerEm != T["head"].unitsPerEm:
+        from fontTools.ttLib.scaleUpem import scale_upem
+        scale_upem(S, T["head"].unitsPerEm)
+        scaled = Path(OUT).with_name(Path(stam_path).stem + f"-{T['head'].unitsPerEm}.ttf")
+        S.save(scaled)
+        S, stam_path = TTFont(scaled), str(scaled)
     # (the base's letter-pair spacing - kerning - is for its own letters, not the Stam ones)
     if "GPOS" in T:
         for fr in T["GPOS"].table.FeatureList.FeatureRecord:
@@ -192,6 +201,7 @@ def main(stam_path: str) -> None:
     moved = 0
     for lk in T["GPOS"].table.LookupList.Lookup:
         for st in lk.SubTable:
+            st = getattr(st, "ExtSubTable", st)     # (Frank Sofer's lookups are extensions since 2026-11-16)
             if type(st).__name__ == "MarkBasePos":
                 for base, rec in zip(st.BaseCoverage.glyphs, st.BaseArray.BaseRecord):
                     m = maps.get(base)
@@ -223,6 +233,7 @@ def main(stam_path: str) -> None:
                           "2008-2010 by Yoram Gnat (GPL-2, with the font exception above), put into "
                           f"{base_family} by Sofer, 2026: its marks and their placement kept, each moved "
                           "to the same place on the Stam letter.")
+    __import__('gpos_ext').as_extensions(T)
     T.save(OUT)
     print(f"{OUT.name}: {len(maps)} letter glyphs, {len(done)} joined glyphs rebuilt, {moved} anchors moved")
     _shva_na(OUT)
@@ -321,7 +332,7 @@ def by_shape(T, body: float) -> list[str]:
                 nx, ny = _roomy(pts, (cx, cy), r, body, r * (4 if strong else 2), 0.15 if strong else 0.25, strong)
             elif letter.glyphName == "shin":
                 # over the right head (shin) or the left one (sin): the heads where the body's top is cut
-                y = max(p[1] for p in pts if p[1] <= body * 0.9)
+                y = max(p[1] for p, v in pts.items() if v and p[1] <= body * 0.9)   # (a height with ink: Drugulin)
                 row = sorted(p[0] for p, v in pts.items() if v and p[1] == y)
                 runs, run = [], [row[0]]
                 for x in row[1:]:
@@ -849,6 +860,7 @@ def clear_between(path) -> str:
         if fr.FeatureTag == "mark":
             fr.Feature.LookupListIndex.append(len(lookups) - 1)
             fr.Feature.LookupCount = len(fr.Feature.LookupListIndex)
+    __import__('gpos_ext').as_extensions(T)
     T.save(path)
     return f"{len(rules)} letter pairs set apart when a mark would touch the letter beside it (up to {max(rules.values())})"
 
@@ -1019,6 +1031,25 @@ def fix_by_shaping(path, words: list[str], rounds: int = 6) -> str:
 _left_words: list = []
 
 
+def _existing_singles(T) -> dict:
+    """{(kind, value): lookup index} of the single-position lookups the collision rules made before (one
+    value for every glyph of the font)."""
+    out = {}
+    n = len(T.getGlyphOrder())
+    for i, lk in enumerate(T["GPOS"].table.LookupList.Lookup):
+        if len(lk.SubTable) != 1:
+            continue
+        st = getattr(lk.SubTable[0], "ExtSubTable", lk.SubTable[0])
+        if type(st).__name__ != "SinglePos" or st.Format != 1 or len(st.Coverage.glyphs) != n:
+            continue
+        v = st.Value
+        if getattr(v, "XAdvance", 0) and not getattr(v, "XPlacement", 0) and not getattr(v, "YPlacement", 0):
+            out.setdefault(("adv", (v.XAdvance,)), i)
+        elif not getattr(v, "XAdvance", 0):
+            out.setdefault(("x", (getattr(v, "XPlacement", 0) or 0, getattr(v, "YPlacement", 0) or 0)), i)
+    return out
+
+
 def fix_by_shaping_(path, words: list[str], rounds: int = 6) -> str:
     """What the rules above miss - a mark set by Taamey D's own context rules: every word of
     Tanach shaped (HarfBuzz) and, where a mark still meets another glyph (Mordy, 2026-10-22:
@@ -1114,7 +1145,9 @@ def fix_by_shaping_(path, words: list[str], rounds: int = 6) -> str:
         gpos = T["GPOS"].table
         lookups = gpos.LookupList.Lookup
         rev = T.getReverseGlyphMap()
-        singles, subtables = {}, []
+        # (one lookup for each move, reused across rounds and runs: a new one each time made thousands, more
+        #  than a font can list - Drugulin's bold, 2026-11-17)
+        singles, subtables = _existing_singles(T), []
         for (before, glyph, after, kind), d in sorted(rules.items(), key=lambda kv: -sum(abs(v) for v in kv[1])):
             k = (kind, d)
             if k not in singles:
@@ -1144,6 +1177,7 @@ def fix_by_shaping_(path, words: list[str], rounds: int = 6) -> str:
                     fr.Feature.LookupListIndex.append(len(lookups) - 1)
                     fr.Feature.LookupCount = len(fr.Feature.LookupListIndex)
         gpos.LookupList.LookupCount = len(lookups)
+        __import__('gpos_ext').as_extensions(T)
         T.save(path)
         T = TTFont(path)
         todo = left_words
@@ -1182,6 +1216,7 @@ def _under_the_leg(path) -> None:
     print(f"  under the foot: {len(mod.under_the_foot(t))}; kamatz katan as the kamatz: {mod.qatan_as_qamats(t)}; "
           f"chataf kamatz: {mod.hataf_as_qatan(t)}; under ק with a meteg: {', '.join(mod.qof_with_meteg(t))}")
     print(f"  a vowel kept in the middle beside a ta'am or meteg (ה ח ט ש ת): {mod.centred_with_another(t)}")
+    __import__('gpos_ext').as_extensions(t)
     t.save(path)
 
 
@@ -1210,4 +1245,11 @@ if __name__ == "__main__":
         OUT, FAMILY, SOURCE = ROOT / "fonts" / "SoferStamAshkenaz.ttf", "Sofer Stam Ashkenaz", "Stam Ashkenaz CLM"
     if "--out" in sys.argv:
         OUT = Path(sys.argv[sys.argv.index("--out") + 1]).resolve()
+    # (other letters with Frank Sofer's marks - a text font, not a Sefer Torah one: Drugulin, 2026-11-17)
+    if "--family" in sys.argv:
+        FAMILY = sys.argv[sys.argv.index("--family") + 1]
+    if "--source" in sys.argv:
+        SOURCE = sys.argv[sys.argv.index("--source") + 1]
+    if "--pad" in sys.argv:
+        PAD = int(sys.argv[sys.argv.index("--pad") + 1])
     main(sys.argv[1])
