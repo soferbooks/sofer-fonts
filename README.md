@@ -87,7 +87,7 @@ sources: `make_frank_sofer.py` (from Taamey D), `make_bold.py`, `make_stam_sefar
 Culmus Stam fonts; `--ashkenaz` for the Ashkenazi one), and the steps they run (`add_shva_na.py`,
 `add_dagesh_hazaq.py`, `add_qamats_qatan.py`, `place_meteg.py`, `clear_meteg.py`,
 `check_font_marks.py`), and for the other fonts `drugulin_ayin.py`, `drugulin_dagesh.py`,
-`drugulin_holam.py`, `finish_mekorot_fonts.py`, `gpos_ext.py`, `dehi_beside.py`, `fix_lsb.py`,
+`drugulin_holam.py`, `finish_mekorot_fonts.py`, `gpos_ext.py`, `dehi_beside.py`, `qof_vowel.py`, `vilna_old_ayin.py`, `fix_lsb.py`,
 `fix_keter_qof.py`, `fix_david_qof.py`, `check_meteg.py` and `meteg_comparison.py` (the PDF in
 `docs/`). They are copied from the Sofer project as they are, so they expect its
 folders (and, for the collision search over Tanach and the siddurim, its text library); they are here so every change
