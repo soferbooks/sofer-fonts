@@ -238,6 +238,10 @@ def main(stam_path: str) -> None:
     print(f"{OUT.name}: {len(maps)} letter glyphs, {len(done)} joined glyphs rebuilt, {moved} anchors moved")
     _shva_na(OUT)
     _under_the_leg(OUT)
+    # (the Sefer Torah letters: the marks under ל under its body, a lone mark under ד under its leg,
+    #  measured on the Stam letters - Open Siddur, 2026-11-23: the ל's vowels hung under its flag)
+    if FAMILY.startswith("Sofer Stam"):
+        print("  " + __import__("under_body").fix(OUT))
     print("  " + clear_between(OUT))
     print("  " + fix_by_shaping(OUT, tanach_words()))
     # (no meteg touching anything, the siddur's too - scripts/clear_meteg.py, Mordy 2026-10-25)

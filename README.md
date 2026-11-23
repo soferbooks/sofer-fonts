@@ -32,7 +32,8 @@ vowel and clear of everything. `modified/CHANGES.md` says what changed in each, 
 - **Kamatz katan** (U+05C7) with a bolder drop, so it is easy to tell from a kamatz gadol, and the
   chataf kamatz drawn the same way (all but Sofer Stam Sefarad).
 - **Vowels placed by each letter's shape**: centred in the opening of ה ח ת, under the foot of ט ש,
-  under the leg of ר ד, beside the leg of ק, with the meteg set right beside its vowel.
+  under the leg of ר ד (and in the Sefer Torah fonts every mark under ל under the ל's body),
+  beside the leg of ק, with the meteg set right beside its vowel.
 - **Sefer Torah script with nikud**: the Stam fonts are the same height as Frank Sofer's letters
   (crowns not counted), so they can be mixed on one page - e.g. Shnayim Mikra, the pasuk in
   Sefer Torah script and then in regular letters.
@@ -87,7 +88,7 @@ sources: `make_frank_sofer.py` (from Taamey D), `make_bold.py`, `make_stam_sefar
 Culmus Stam fonts; `--ashkenaz` for the Ashkenazi one), and the steps they run (`add_shva_na.py`,
 `add_dagesh_hazaq.py`, `add_qamats_qatan.py`, `place_meteg.py`, `clear_meteg.py`,
 `check_font_marks.py`), and for the other fonts `drugulin_ayin.py`, `drugulin_dagesh.py`,
-`drugulin_holam.py`, `finish_mekorot_fonts.py`, `gpos_ext.py`, `dehi_beside.py`, `qof_vowel.py`, `vilna_old_ayin.py`, `fix_lsb.py`,
+`drugulin_holam.py`, `finish_mekorot_fonts.py`, `gpos_ext.py`, `dehi_beside.py`, `qof_vowel.py`, `under_body.py`, `vilna_old_ayin.py`, `fix_lsb.py`,
 `fix_keter_qof.py`, `fix_david_qof.py`, `check_meteg.py` and `meteg_comparison.py` (the PDF in
 `docs/`). They are copied from the Sofer project as they are, so they expect its
 folders (and, for the collision search over Tanach and the siddurim, its text library); they are here so every change
