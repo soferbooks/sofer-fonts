@@ -12,10 +12,11 @@ came out left of the leg.  Here:
   middle of the letter's ink just above the line (FOOT_Y) - where Frank Sofer sets it on its own ל.
   Every mark under the ל moves with it (a vowel and its ta'am or meteg keep their places side by side).
 - ד (every form): one contextual lookup, last in "mark": a lone mark under the letter (no other mark
-  under it after) moves to under the middle of the leg's ink just above the line; with two marks under
+  under it after) moves to under the letter's lowest point - the bottom tip of its leg (Mordy,
+  2026-11-23); Frank Sofer and its bold too; with two marks under
   the letter they stay where they were (as in Frank Sofer).
 
-    .venv/Scripts/python scripts/under_body.py <font.ttf> [...] [--dalet-only]    (in place)
+    .venv/Scripts/python scripts/under_body.py <font.ttf> [...] [--dalet-only] [--lamed-by -0.17]   (in place)
 
 Run on a built font after its other placement steps, then the collision fixer and clear_meteg
 (make_stam_sefarad.py runs it for the Sefer Torah fonts).  Run again on a font that has it, it changes
@@ -71,6 +72,53 @@ def _target(T, name, scale, which):
     return max(runs, key=lambda r: r[1] - r[0]) if which == "lamed" else max(runs, key=lambda r: r[1])
 
 
+def _lowest_x(T, name, tol=12):
+    """The x of the letter's lowest ink (the middle of its outline's points within ``tol`` units of the
+    lowest one): the bottom tip of the ד's leg (Mordy, 2026-11-23: "the nikud under the LOWEST point of
+    the ד")."""
+    from fontTools.pens.basePen import BasePen
+
+    class _Pts(BasePen):
+        def __init__(self, gs):
+            super().__init__(gs)
+            self.pts = []
+
+        def _moveTo(self, p):
+            self.pts.append(p)
+            self.last = p
+
+        def _lineTo(self, p):
+            self.pts.append(p)
+            self.last = p
+
+        def _curveToOne(self, a, b, c):
+            p0 = self.last
+            for i in range(1, 17):
+                t = i / 16
+                mt = 1 - t
+                self.pts.append((mt ** 3 * p0[0] + 3 * mt * mt * t * a[0] + 3 * mt * t * t * b[0] + t ** 3 * c[0],
+                                 mt ** 3 * p0[1] + 3 * mt * mt * t * a[1] + 3 * mt * t * t * b[1] + t ** 3 * c[1]))
+            self.last = c
+
+        def _qCurveToOne(self, a, b):
+            p0 = self.last
+            for i in range(1, 13):
+                t = i / 12
+                mt = 1 - t
+                self.pts.append((mt * mt * p0[0] + 2 * mt * t * a[0] + t * t * b[0],
+                                 mt * mt * p0[1] + 2 * mt * t * a[1] + t * t * b[1]))
+            self.last = b
+
+    gs = T.getGlyphSet()
+    pen = _Pts(gs)
+    gs[name].draw(pen)
+    if not pen.pts:
+        return None
+    low = min(y for _, y in pen.pts)
+    xs = [x for x, y in pen.pts if y <= low + tol]
+    return (min(xs) + max(xs)) / 2
+
+
 def _below_marks(T, gs):
     classes = getattr(T["GDEF"].table.GlyphClassDef, "classDefs", {})
     out = set()
@@ -83,11 +131,18 @@ def _below_marks(T, gs):
     return out
 
 
-def _lamed(T, scale) -> list[str]:
-    """Move the ל forms' anchors for the marks below the line."""
+def _lamed(T, scale, by: float = 0.0) -> list[str]:
+    """Move the ל forms' anchors for the marks below the line: under the body's middle, or (``by``,
+    a fraction of the letter's width; minus = left) by that much."""
     font, gs = _font(T), T.getGlyphSet()
     shifts = {}
-    for form in ("", "ּ", "ּ׉"):
+    if by:
+        for n in T.getGlyphOrder():
+            if n.startswith("lamed") and T["glyf"][n].numberOfContours:
+                g = T["glyf"][n]
+                g.recalcBounds(T["glyf"])
+                shifts[n] = round(by * (g.xMax - g.xMin))
+    for form in (() if by else ("", "ּ", "ּ׉")):
         g = _shape(font, T, gs, "ל" + form + "ְ")
         base = max(g, key=lambda q: q[2] - q[1])
         under = [q for q in g if q is not base and q[0] in ("sheva", "shevana")]
@@ -170,11 +225,11 @@ def _dalet(T, scale) -> list[str]:
             under = [q for q in g if q is not base and q[0] in below]
             if len(under) != 1:
                 continue
-            run = _target(T, base[0], scale, "dalet")
-            if run is None:
+            low = _lowest_x(T, base[0], 12 * scale)
+            if low is None:
                 continue
             m = under[0]
-            dx = round(base[3] + (run[0] + run[1]) / 2 - (m[1] + m[2]) / 2)
+            dx = round(base[3] + low - (m[1] + m[2]) / 2)
             if abs(dx) >= MIN_MOVE * scale:
                 rules[(base[0], m[0])] = dx
     if not rules:
@@ -229,10 +284,10 @@ def _dalet(T, scale) -> list[str]:
     return [f"{len(rules)} lone marks, {moves[0]:+d}..{moves[-1]:+d} units"]
 
 
-def fix(path: Path, lamed: bool = True) -> str:
+def fix(path: Path, lamed: bool = True, lamed_by: float = 0.0) -> str:
     T = TTFont(path)
     scale = T["head"].unitsPerEm / 2048
-    lam = _lamed(T, scale) if lamed else ["not moved (--dalet-only)"]
+    lam = _lamed(T, scale, lamed_by) if lamed or lamed_by else ["not moved (--dalet-only)"]
     T2 = TTFont(io.BytesIO(_save(T)))
     dal = _dalet(T2, scale)
     __import__("gpos_ext").as_extensions(T2)
@@ -248,6 +303,9 @@ def _save(T):
 
 if __name__ == "__main__":
     # (--dalet-only: the ד alone - Mekorot Rashi, whose ל's vowel stands under its slanting body as drawn)
-    for p in sys.argv[1:]:
-        if not p.startswith("--"):
-            print(fix(Path(p), lamed="--dalet-only" not in sys.argv))
+    # (--lamed-by F: the marks under ל moved by F of the letter's width, minus = left - Mekorot Rashi's,
+    #  Mordy 2026-11-23: "the ל in Rashi should be a bit more to the left")
+    by = float(sys.argv[sys.argv.index("--lamed-by") + 1]) if "--lamed-by" in sys.argv else 0.0
+    args = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] != "--lamed-by"]
+    for p in args:
+        print(fix(Path(p), lamed="--dalet-only" not in sys.argv, lamed_by=by))

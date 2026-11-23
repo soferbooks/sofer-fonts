@@ -32,7 +32,8 @@ vowel and clear of everything. `modified/CHANGES.md` says what changed in each, 
 - **Kamatz katan** (U+05C7) with a bolder drop, so it is easy to tell from a kamatz gadol, and the
   chataf kamatz drawn the same way (all but Sofer Stam Sefarad).
 - **Vowels placed by each letter's shape**: centred in the opening of ה ח ת, under the foot of ט ש,
-  under the leg of ר ד (and in the Sefer Torah fonts every mark under ל under the ל's body),
+  under the leg of ר, under the lowest point of ד (and in the Sefer Torah fonts every mark under ל
+  under the ל's body),
   beside the leg of ק, with the meteg set right beside its vowel.
 - **Sefer Torah script with nikud**: the Stam fonts are the same height as Frank Sofer's letters
   (crowns not counted), so they can be mixed on one page - e.g. Shnayim Mikra, the pasuk in
