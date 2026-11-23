@@ -72,9 +72,11 @@ def _target(T, name, scale, which):
     return max(runs, key=lambda r: r[1] - r[0]) if which == "lamed" else max(runs, key=lambda r: r[1])
 
 
-def _lowest_x(T, name, tol=12):
-    """The x of the letter's lowest ink (the middle of its outline's points within ``tol`` units of the
-    lowest one): the bottom tip of the ד's leg (Mordy, 2026-11-23: "the nikud under the LOWEST point of
+def _lowest_x(T, name, tol=0):
+    """The x of the letter's lowest ink: its outline's lowest point (the middle of several only when they
+    are exactly as low - a flat bottom), the bottom tip of the ד's leg, which slants down to its left
+    corner (Mordy, 2026-11-23: "it sits under the RIGHT of the stroke, whereas the lowest point is on
+    the LEFT") (Mordy, 2026-11-23: "the nikud under the LOWEST point of
     the ד")."""
     from fontTools.pens.basePen import BasePen
 
@@ -142,7 +144,7 @@ def _lamed(T, scale, by: float = 0.0) -> list[str]:
                 g = T["glyf"][n]
                 g.recalcBounds(T["glyf"])
                 shifts[n] = round(by * (g.xMax - g.xMin))
-    for form in (() if by else ("", "ּ", "ּ׉")):
+    for form in (() if by else ("", "ּ", "׉")):
         g = _shape(font, T, gs, "ל" + form + "ְ")
         base = max(g, key=lambda q: q[2] - q[1])
         under = [q for q in g if q is not base and q[0] in ("sheva", "shevana")]
@@ -155,7 +157,7 @@ def _lamed(T, scale, by: float = 0.0) -> list[str]:
         third = (run[1] - run[0]) / 5
         if run[0] + third <= centre <= run[1] - third:
             continue                    # (already under the body's middle: left as the font has it)
-        shifts[base[0]] = round((run[0] + run[1]) / 2 - centre)
+        shifts.setdefault(base[0], round((run[0] + run[1]) / 2 - centre))
     # (the letter's other forms - wide, for justifying: as the plain one)
     for n in T.getGlyphOrder():
         root = n.split(".")[0]
@@ -214,7 +216,8 @@ def _dalet(T, scale) -> list[str]:
     font, gs = _font(T), T.getGlyphSet()
     below = _below_marks(T, gs)
     rules: dict = {}
-    for form in ("", "ּ", "ּ׉", "ֿ"):
+    seen: set = set()
+    for form in ("", "ּ", "׉", "ֿ"):
         for cp in list(range(0x0591, 0x05B0)) + list(range(0x05B0, 0x05BC)) + [0x05BD, 0x05C7, 0x05C8]:
             if cp in (0x05B9, 0x05BA, 0x059A, 0x05AD):     # (the dehi and yetiv: set beside, dehi_beside.py)
                 continue
@@ -225,13 +228,16 @@ def _dalet(T, scale) -> list[str]:
             under = [q for q in g if q is not base and q[0] in below]
             if len(under) != 1:
                 continue
-            low = _lowest_x(T, base[0], 12 * scale)
+            low = _lowest_x(T, base[0])
             if low is None:
                 continue
             m = under[0]
             dx = round(base[3] + low - (m[1] + m[2]) / 2)
-            if abs(dx) >= MIN_MOVE * scale:
+            # (the first spelling found for a letter form counts: a dagesh and a dagesh chazak together -
+            #  no real text has both - set the vowel elsewhere and had overwritten ד-with-dagesh's rule)
+            if abs(dx) >= MIN_MOVE * scale and (base[0], m[0]) not in seen:
                 rules[(base[0], m[0])] = dx
+            seen.add((base[0], m[0]))
     if not rules:
         return []
     if sets is None:
