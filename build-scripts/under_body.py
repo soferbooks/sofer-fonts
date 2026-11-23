@@ -72,45 +72,47 @@ def _target(T, name, scale, which):
     return max(runs, key=lambda r: r[1] - r[0]) if which == "lamed" else max(runs, key=lambda r: r[1])
 
 
+from fontTools.pens.basePen import BasePen
+
+class _Pts(BasePen):
+    def __init__(self, gs):
+        super().__init__(gs)
+        self.pts = []
+
+    def _moveTo(self, p):
+        self.pts.append(p)
+        self.last = p
+
+    def _lineTo(self, p):
+        self.pts.append(p)
+        self.last = p
+
+    def _curveToOne(self, a, b, c):
+        p0 = self.last
+        for i in range(1, 17):
+            t = i / 16
+            mt = 1 - t
+            self.pts.append((mt ** 3 * p0[0] + 3 * mt * mt * t * a[0] + 3 * mt * t * t * b[0] + t ** 3 * c[0],
+                             mt ** 3 * p0[1] + 3 * mt * mt * t * a[1] + 3 * mt * t * t * b[1] + t ** 3 * c[1]))
+        self.last = c
+
+    def _qCurveToOne(self, a, b):
+        p0 = self.last
+        for i in range(1, 13):
+            t = i / 12
+            mt = 1 - t
+            self.pts.append((mt * mt * p0[0] + 2 * mt * t * a[0] + t * t * b[0],
+                             mt * mt * p0[1] + 2 * mt * t * a[1] + t * t * b[1]))
+        self.last = b
+
+
+
 def _lowest_x(T, name, tol=0):
     """The x of the letter's lowest ink: its outline's lowest point (the middle of several only when they
     are exactly as low - a flat bottom), the bottom tip of the ד's leg, which slants down to its left
     corner (Mordy, 2026-11-23: "it sits under the RIGHT of the stroke, whereas the lowest point is on
     the LEFT") (Mordy, 2026-11-23: "the nikud under the LOWEST point of
     the ד")."""
-    from fontTools.pens.basePen import BasePen
-
-    class _Pts(BasePen):
-        def __init__(self, gs):
-            super().__init__(gs)
-            self.pts = []
-
-        def _moveTo(self, p):
-            self.pts.append(p)
-            self.last = p
-
-        def _lineTo(self, p):
-            self.pts.append(p)
-            self.last = p
-
-        def _curveToOne(self, a, b, c):
-            p0 = self.last
-            for i in range(1, 17):
-                t = i / 16
-                mt = 1 - t
-                self.pts.append((mt ** 3 * p0[0] + 3 * mt * mt * t * a[0] + 3 * mt * t * t * b[0] + t ** 3 * c[0],
-                                 mt ** 3 * p0[1] + 3 * mt * mt * t * a[1] + 3 * mt * t * t * b[1] + t ** 3 * c[1]))
-            self.last = c
-
-        def _qCurveToOne(self, a, b):
-            p0 = self.last
-            for i in range(1, 13):
-                t = i / 12
-                mt = 1 - t
-                self.pts.append((mt * mt * p0[0] + 2 * mt * t * a[0] + t * t * b[0],
-                                 mt * mt * p0[1] + 2 * mt * t * a[1] + t * t * b[1]))
-            self.last = b
-
     gs = T.getGlyphSet()
     pen = _Pts(gs)
     gs[name].draw(pen)
@@ -119,6 +121,38 @@ def _lowest_x(T, name, tol=0):
     low = min(y for _, y in pen.pts)
     xs = [x for x, y in pen.pts if y <= low + tol]
     return (min(xs) + max(xs)) / 2
+
+
+DOTS = ("sheva", "shevana", "xiriq")                       # (one-point marks: their left edge)
+KAMATZ = ("qamats", "qamatsqatan", "xatafqamats")         # (the left of the kamatz's drop)
+
+
+def _outline(T, name):
+    """The glyph's outline points, curves flattened."""
+    gs = T.getGlyphSet()
+    pen = _Pts(gs)
+    gs[name].draw(pen)
+    return pen.pts
+
+
+def _leg_left(T, name, near=60):
+    """The leftmost ink of the ד's leg within ``near`` units of its lowest point (Mordy, 2026-11-23, the
+    Sefer Torah fonts: "the single-point nikud ... their left-most point under the left-most point of the ד")."""
+    pts = _outline(T, name)
+    low = min(y for _, y in pts)
+    lx = min(x for x, y in pts if y == low)
+    return min(x for x, y in pts if y <= low + near and abs(x - lx) < 250)
+
+
+def _drop_left(T, name):
+    """The left edge of a kamatz's drop (the part hanging under its bar; in a chataf kamatz, the kamatz's),
+    from the glyph's left edge (Mordy: "the left side of the drop of the kamatz aligned with the left of the ד")."""
+    pts = _outline(T, name)
+    xmin = min(x for x, _ in pts)
+    ymin, ymax = min(y for _, y in pts), max(y for _, y in pts)
+    low_x = min(pts, key=lambda p: p[1])[0]
+    drop = [x for x, y in pts if y < ymin + 0.45 * (ymax - ymin) and abs(x - low_x) < 150]
+    return min(drop) - xmin
 
 
 def _below_marks(T, gs):
@@ -184,7 +218,7 @@ def _lamed(T, scale, by: float = 0.0) -> list[str]:
     return sorted(set(done))
 
 
-def _dalet(T, scale) -> list[str]:
+def _dalet(T, scale, left: bool = False) -> list[str]:
     gpos, gdef = T["GPOS"].table, T["GDEF"].table
     lookups = gpos.LookupList.Lookup
     rev = T.getReverseGlyphMap()
@@ -233,9 +267,15 @@ def _dalet(T, scale) -> list[str]:
                 continue
             m = under[0]
             dx = round(base[3] + low - (m[1] + m[2]) / 2)
+            if left:                    # (the Sefer Torah fonts: lined up on the leg's left edge)
+                ref = base[3] + _leg_left(T, base[0])
+                if m[0] in DOTS:
+                    dx = round(ref - m[1])
+                elif m[0] in KAMATZ:
+                    dx = round(ref - (m[1] + _drop_left(T, m[0])))
             # (the first spelling found for a letter form counts: a dagesh and a dagesh chazak together -
             #  no real text has both - set the vowel elsewhere and had overwritten ד-with-dagesh's rule)
-            if abs(dx) >= MIN_MOVE * scale and (base[0], m[0]) not in seen:
+            if abs(dx) >= (3 if left else MIN_MOVE) * scale and (base[0], m[0]) not in seen:   # (lined up: exactly)
                 rules[(base[0], m[0])] = dx
             seen.add((base[0], m[0]))
     if not rules:
@@ -290,12 +330,12 @@ def _dalet(T, scale) -> list[str]:
     return [f"{len(rules)} lone marks, {moves[0]:+d}..{moves[-1]:+d} units"]
 
 
-def fix(path: Path, lamed: bool = True, lamed_by: float = 0.0) -> str:
+def fix(path: Path, lamed: bool = True, lamed_by: float = 0.0, left: bool = False) -> str:
     T = TTFont(path)
     scale = T["head"].unitsPerEm / 2048
     lam = _lamed(T, scale, lamed_by) if lamed or lamed_by else ["not moved (--dalet-only)"]
     T2 = TTFont(io.BytesIO(_save(T)))
-    dal = _dalet(T2, scale)
+    dal = _dalet(T2, scale, left)
     __import__("gpos_ext").as_extensions(T2)
     T2.save(path)
     return f"{path.name}: ל {', '.join(lam) or 'already under its body'}; ד {', '.join(dal) or 'already under its leg'}"
@@ -309,9 +349,11 @@ def _save(T):
 
 if __name__ == "__main__":
     # (--dalet-only: the ד alone - Mekorot Rashi, whose ל's vowel stands under its slanting body as drawn)
+    # (--left-align: the Sefer Torah fonts - under ד a dot's left edge, and a kamatz's drop's left edge, on
+    #  the leg's leftmost ink near its bottom; the other marks still centred under the lowest point)
     # (--lamed-by F: the marks under ל moved by F of the letter's width, minus = left - Mekorot Rashi's,
     #  Mordy 2026-11-23: "the ל in Rashi should be a bit more to the left")
     by = float(sys.argv[sys.argv.index("--lamed-by") + 1]) if "--lamed-by" in sys.argv else 0.0
     args = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] != "--lamed-by"]
     for p in args:
-        print(fix(Path(p), lamed="--dalet-only" not in sys.argv, lamed_by=by))
+        print(fix(Path(p), lamed="--dalet-only" not in sys.argv, lamed_by=by, left="--left-align" in sys.argv))
