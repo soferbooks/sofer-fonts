@@ -10,7 +10,8 @@ under the GNU GPL version 2 with the font exception (see "Licence" below).
 | **Frank Sofer Bold** | `fonts/FrankSofer-Bold.ttf` | Its bold |
 | **Sofer Stam Ashkenaz** | `fonts/SoferStamAshkenaz.ttf` | Ashkenazi Sefer Torah script **with nikud and ta'amim** |
 | **Sofer Stam Sefarad** | `fonts/SoferStamSefarad.ttf` | Sefardi Sefer Torah script **with nikud and ta'amim** |
-| **Vilna Sofer** | `fonts/VilnaSofer.ttf`, `fonts/VilnaSofer-Bold.ttf` | Culmus' Drugulin CLM letters with Frank Sofer's nikud and ta'amim - Sofer's standard book face |
+| **Vilna Sofer** | `fonts/VilnaSofer.ttf`, `fonts/VilnaSofer-Bold.ttf` | A printed-sefer look (new 2026-11-24) with Frank Sofer's nikud and ta'amim - Sofer's standard face for Tanach, Mishnah and Gemara |
+| **Vilna Classic** | `fonts/VilnaClassic.ttf`, `fonts/VilnaClassic-Bold.ttf` | The former Vilna Sofer (Culmus' Drugulin CLM letters with Frank Sofer's nikud and ta'amim), renamed 2026-11-24 |
 | **Hadassah** | `fonts/Hadassah.ttf`, `fonts/Hadassah-Bold.ttf` | Culmus' Hadasim CLM letters with Frank Sofer's nikud and ta'amim |
 | **Mekorot Rashi** | `fonts/MekorotRashi.ttf`, `fonts/MekorotRashi-Bold.ttf` | Rashi script (Mekorot) with Frank Sofer's nikud - see "Licence" below |
 
@@ -94,3 +95,7 @@ Culmus Stam fonts; `--ashkenaz` for the Ashkenazi one), and the steps they run (
 `docs/`). They are copied from the Sofer project as they are, so they expect its
 folders (and, for the collision search over Tanach and the siddurim, its text library); they are here so every change
 to the fonts can be seen and repeated.
+
+## Changes, 2026-11-24
+
+Fonts rebuilt: new Vilna Sofer look (the old one is now Vilna Classic); the dagesh in a final mem centred; the dagesh chazak placed as the plain dagesh; the dagesh in bet and kaf recentred in Frank Sofer (and the fonts built on it).
