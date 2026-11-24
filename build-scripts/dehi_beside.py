@@ -10,7 +10,7 @@ letter, with or without a dagesh or the shin / sin dot, and every vowel; with no
 letter, in the middle under it.  Only a ta'am that is further away moves.  One contextual rule, last in the
 "mark" feature (letter, vowel, dehi; other marks skipped).
 
-    .venv/Scripts/python scripts/dehi_beside.py <font.ttf> [...]     (in place)
+    .venv/Scripts/python scripts/dehi_beside.py <font.ttf> [...] [--step 15]    (in place)
 
 Run after the font's other placement steps; then the collision fixer and check_marks.
 """
@@ -52,7 +52,10 @@ def _shape(font: hb.Font, T: TTFont, gs, text: str):
     return out
 
 
-def fix(path: Path) -> str:
+def fix(path: Path, step: int | None = None) -> str:
+    """``step``: each shift rounded to a multiple of it (one rounding to 0 is dropped), so the rules group into
+    far fewer subtables - for Mekorot Rashi, whose GPOS is near the 64 KB LookupList limit (step 15: 203-239
+    subtables instead of ~1,000; Antigravity, 2026-11-24).  None: every shift exact, as before."""
     T = TTFont(path)
     data = path.read_bytes()
     font = hb.Font(hb.Face(hb.Blob(data)))
@@ -83,8 +86,11 @@ def fix(path: Path) -> str:
                                 continue
                             dx = round((base[1] + base[2]) / 2 - (d[0][1] + d[0][2]) / 2)
                             if dx < 0:
-                                rules[(tg, base[0], None)] = dx
-                                taam_glyphs.add(tg)
+                                if step:
+                                    dx = round(dx / step) * step
+                                if dx < 0:
+                                    rules[(tg, base[0], None)] = dx
+                                    taam_glyphs.add(tg)
                             continue
                         if len(under) != 1:      # (a dagesh drawn apart, or two marks: left as they are)
                             continue
@@ -93,9 +99,12 @@ def fix(path: Path) -> str:
                         # (further away: moved in; over the vowel - Drugulin's ע set its dehi where its
                         #  vowel goes, the two in one blot, Mordy 2026-11-18 - moved out to stand beside it)
                         if dx < 0 or d[0][1] < vowel[2]:
-                            rules[(tg, base[0], vowel[0])] = dx
-                            vowel_glyphs.add(vowel[0])
-                            taam_glyphs.add(tg)
+                            if step:
+                                dx = round(dx / step) * step
+                            if dx != 0:
+                                rules[(tg, base[0], vowel[0])] = dx
+                                vowel_glyphs.add(vowel[0])
+                                taam_glyphs.add(tg)
     if not rules:
         return f"{path.name}: nothing to move"
     rev = T.getReverseGlyphMap()
@@ -162,5 +171,11 @@ def fix(path: Path) -> str:
 
 
 if __name__ == "__main__":
-    for p in sys.argv[1:]:
-        print(fix(Path(p)))
+    args = sys.argv[1:]
+    step = None
+    if "--step" in args:       # (e.g. --step 15, see fix())
+        i = args.index("--step")
+        step = int(args[i + 1])
+        del args[i:i + 2]
+    for p in args:
+        print(fix(Path(p), step=step))

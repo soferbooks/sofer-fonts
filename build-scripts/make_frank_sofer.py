@@ -63,6 +63,14 @@ def main(src: str) -> None:
     print(f"  a vowel kept in the middle beside a ta'am or meteg: {centred_with_another(t)}")
     print(f"  the chirik of ירושלם under the ם's corner: {orphan_under_mem(t)}")
     t.save(OUT)
+    # (--dagesh-fixes, 2026-11-24 - Antigravity, Mordy: the dagesh recentred in ב and כ, the marks and the
+    #  dagesh / dagesh chazak in ם, the dagesh chazak level with the dagesh everywhere: scripts/fix_finalmem_dagesh.py;
+    #  both weights; off unless asked, so a plain run builds what it always did)
+    if "--dagesh-fixes" in sys.argv:
+        import fix_finalmem_dagesh
+        for f in (OUT, bold):
+            for line in fix_finalmem_dagesh.apply("frank", Path(f)):
+                print(f"  {Path(f).name}: {line}")
     # (no mark touching anything in Tanach or the siddurim, found by shaping every word - Mordy,
     #  2026-11-04: "fix the fonts for the siddur"; a revia mugrash on one letter touched; and a
     #  mark under ר's stroke slid back where it would touch the mark of the letter before)

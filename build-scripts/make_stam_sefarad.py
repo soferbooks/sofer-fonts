@@ -242,6 +242,12 @@ def main(stam_path: str) -> None:
     #  measured on the Stam letters - Open Siddur, 2026-11-23: the ל's vowels hung under its flag)
     if FAMILY.startswith("Sofer Stam"):
         print("  " + __import__("under_body").fix(OUT, left=True))
+    # (--dagesh-fixes, 2026-11-24 - Antigravity, Mordy: ם's marks and dagesh centred, the dagesh chazak level
+    #  with the dagesh, a lone vowel under ק under its body: scripts/fix_finalmem_dagesh.py "stam"; off unless
+    #  asked.  Before the collision fixer, which then sees the final marks)
+    if "--dagesh-fixes" in sys.argv:
+        for line in __import__("fix_finalmem_dagesh").apply("stam", OUT):
+            print("  " + line)
     print("  " + clear_between(OUT))
     print("  " + fix_by_shaping(OUT, tanach_words()))
     # (no meteg touching anything, the siddur's too - scripts/clear_meteg.py, Mordy 2026-10-25)

@@ -118,8 +118,19 @@ def finish(path: Path, words: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    files = [Path(a) for a in sys.argv[1:]] or [FONTS / f for f in FILES]
+    dagesh_fixes = "--dagesh-fixes" in sys.argv
+    files = [Path(a) for a in sys.argv[1:] if not a.startswith("--")] or [FONTS / f for f in FILES]
     words = sorted(set(msf.tanach_words() + msf.siddur_words()))
     print(f"{len(words):,} words of Tanach and the siddurim", flush=True)
     for p in files:
         finish(p, words)
+        # (--dagesh-fixes, 2026-11-24 - Antigravity, Mordy: the ם / ב dagesh and dagesh chazak fixes, the dehi
+        #  quantized for Mekorot Rashi, scripts/fix_finalmem_dagesh.py; after the collision fixer, whose
+        #  result they do not disturb - checked by check_font_marks / check_meteg.  Vilna Sofer has its own
+        #  builder, make_vilna_sofer.py; Drugulin was Vilna Sofer's old name, now Vilna Classic)
+        if dagesh_fixes:
+            kind = "rashi" if p.name.startswith("MekorotRashi") else "hadassah" if p.name.startswith("Hadassah") else None
+            if kind:
+                import fix_finalmem_dagesh
+                for line in fix_finalmem_dagesh.apply(kind, p):
+                    print(f"  {p.name}: {line}", flush=True)
