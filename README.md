@@ -9,7 +9,7 @@ under the GNU GPL version 2 with the font exception (see "Licence" below).
 | **Frank Sofer** | `fonts/FrankSofer.ttf` | A classic Frank Ruehl-style book face with nikud and ta'amim, every mark in its place |
 | **Frank Sofer Bold** | `fonts/FrankSofer-Bold.ttf` | Its bold |
 | **Sofer Stam Ashkenaz** | `fonts/SoferStamAshkenaz.ttf` | Ashkenazi Sefer Torah script **with nikud and ta'amim** |
-| **Sofer Stam Sefarad** | `fonts/SoferStamSefarad.ttf` | Sefardi Sefer Torah script **with nikud and ta'amim** |
+| **Sofer Stam Sefarad** | `fonts/SoferStamSefarad.ttf` | Sefardi Sefer Torah script **with nikud and ta'amim** (new letters 2026-11-27) |
 | **Vilna Sofer** | `fonts/VilnaSofer.ttf`, `fonts/VilnaSofer-Bold.ttf` | A printed-sefer look (new 2026-11-24) with Frank Sofer's nikud and ta'amim - Sofer's standard face for Tanach, Mishnah and Gemara |
 | **Vilna Classic** | `fonts/VilnaClassic.ttf`, `fonts/VilnaClassic-Bold.ttf` | The former Vilna Sofer (Culmus' Drugulin CLM letters with Frank Sofer's nikud and ta'amim), renamed 2026-11-24 |
 | **Hadassah** | `fonts/Hadassah.ttf`, `fonts/Hadassah-Bold.ttf` | Culmus' Hadasim CLM letters with Frank Sofer's nikud and ta'amim |
@@ -47,9 +47,14 @@ vowel and clear of everything. `modified/CHANGES.md` says what changed in each, 
   **Taamey Frank CLM** (Culmus). It is renamed because Taamey D's licence reserves that name. Our
   changes: the marks under the line raised closer to the letter, the placements above, the kamatz
   katan, the shva na and dagesh chazak, and the bold.
-- **Sofer Stam Ashkenaz / Sefarad** take their letters from Yoram Gnat's **Stam Ashkenaz CLM** and
-  **Stam Sefarad CLM** ([Culmus](https://culmus.sourceforge.io)), and their nikud, ta'amim and mark
-  placement from Frank Sofer, with every mark moved clear of the Stam letters' shapes.
+- **Sofer Stam Ashkenaz** takes its letters from Yoram Gnat's **Stam Ashkenaz CLM**
+  ([Culmus](https://culmus.sourceforge.io)), and its nikud, ta'amim and mark placement from Frank Sofer,
+  with every mark moved clear of the Stam letters' shapes.
+- **Sofer Stam Sefarad** (new letters, 2026-11-27): its Sefardi Sefer Torah letters were drawn anew for
+  Sofer as clean shapes on a three-kulmus grid, with their crowns; its nikud, ta'amim and mark placement
+  come from Frank Sofer, every mark moved clear of the new letters. Build scripts in
+  `build-scripts/stam-sefarad/` (the letters' working pictures are not included). The earlier version,
+  from Culmus' **Stam Sefarad CLM**, is in this repository's history.
 
 - **Vilna Sofer** takes its letters from Culmus' **Drugulin CLM** (its ע with Frank Sofer's base,
   each dagesh placed by eye, the cholam where Frank Sofer puts it), **Hadassah** from Culmus'
